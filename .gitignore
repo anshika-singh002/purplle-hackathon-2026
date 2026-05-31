@@ -1,0 +1,9 @@
+*.mp4
+*.mkv
+*.avi
+*.zip
+*.db
+__pycache__/
+.pytest_cache/
+.DS_Store
+output/

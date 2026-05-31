@@ -1,6 +1,12 @@
-version: "3.8"
 services:
   api:
     build: .
     ports:
       - "8000:8000"
+    volumes:
+      - ./:/app  # Persists the SQLite database to your local folder
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
