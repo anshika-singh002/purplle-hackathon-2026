@@ -14,3 +14,7 @@ Follow these commands to clone, deploy, process video, and view the real-time an
 ## 📊 Live Bonus Dashboard
 To view the real-time Server-Sent Events (SSE) dashboard, open your browser and navigate to:
 **[http://localhost:8000/dashboard](http://localhost:8000/dashboard)**
+
+## Local Dashboard
+As per the specification, the local dashboard can be accessed at:
+http://localhost:8000/dashboard
