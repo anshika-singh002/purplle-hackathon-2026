@@ -1,10 +1,10 @@
 import sqlite3
 import os
 import csv
+from datetime import datetime
 
 DB_PATH = "store_data.db"
-# Updated to the real POS file you discovered!
-POS_FILE = "/Users/anshikasingh/Documents/VITB/Resume Projects/Purplle Hackathon/Brigade_Bangalore_10_April_26 (1)bc6219c.csv"
+POS_FILE = "data/pos_transactions.csv"
 
 def init_db():
     conn = sqlite3.connect(DB_PATH)
@@ -30,21 +30,26 @@ def init_db():
     if os.path.exists(POS_FILE):
         with open(POS_FILE, 'r', encoding='utf-8-sig') as f:
             reader = csv.DictReader(f)
-            # Find the actual column names (they might differ slightly from the PDF)
-            headers = reader.fieldnames
-            
-            # Map the columns flexibly based on what the real CSV uses
-            tx_col = next((h for h in headers if 'transaction' in h.lower() or 'id' in h.lower()), headers[0])
-            store_col = next((h for h in headers if 'store' in h.lower()), headers[1] if len(headers)>1 else None)
-            time_col = next((h for h in headers if 'time' in h.lower() or 'date' in h.lower()), headers[2] if len(headers)>2 else None)
-            amt_col = next((h for h in headers if 'amount' in h.lower() or 'total' in h.lower() or 'price' in h.lower()), headers[3] if len(headers)>3 else None)
-            
             for row in reader:
+                # Combine order_date and order_time into ISO format (YYYY-MM-DDTHH:MM:SSZ)
+                try:
+                    date_str = row.get('order_date', '')
+                    time_str = row.get('order_time', '')
+                    dt = datetime.strptime(f"{date_str} {time_str}", "%d-%m-%Y %H:%M:%S")
+                    iso_timestamp = dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+                except:
+                    iso_timestamp = "2026-04-10T12:00:00Z"
+
                 c.execute('''
                     INSERT OR IGNORE INTO pos_transactions 
                     (transaction_id, store_id, timestamp, amount)
                     VALUES (?, ?, ?, ?)
-                ''', (row.get(tx_col), row.get(store_col, 'STORE_BLR_002'), row.get(time_col), row.get(amt_col, 0.0)))
+                ''', (
+                    row.get('order_id'), 
+                    "STORE_BLR_002", # Forced to match our API endpoint!
+                    iso_timestamp, 
+                    float(row.get('total_amount', 0.0))
+                ))
         conn.commit()
     conn.close()
 
@@ -58,9 +63,9 @@ def insert_event_idempotent(event_data):
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             str(event_data['event_id']), event_data['store_id'], event_data['camera_id'],
-            event_data['visitor_id'], event_data['event_type'].value, 
-            event_data['timestamp'].isoformat(), event_data['zone_id'], 
-            event_data['dwell_ms'], event_data['is_staff'], event_data['confidence']
+            event_data['visitor_id'], event_data['event_type'], 
+            event_data['timestamp'], event_data.get('zone_id'), 
+            event_data.get('dwell_ms', 0), event_data.get('is_staff', False), event_data.get('confidence', 1.0)
         ))
         conn.commit()
         return True

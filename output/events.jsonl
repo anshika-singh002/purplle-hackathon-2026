@@ -1,0 +1,7 @@
+{"event_id": "uuid-1", "store_id": "STORE_BLR_002", "camera_id": "CAM1", "visitor_id": "V_001", "event_type": "ENTRY", "timestamp": "2026-04-10T16:50:00Z", "is_staff": false}
+{"event_id": "uuid-2", "store_id": "STORE_BLR_002", "camera_id": "CAM1", "visitor_id": "V_001", "event_type": "ZONE_ENTER", "zone_id": "SKINCARE", "timestamp": "2026-04-10T16:51:00Z", "is_staff": false}
+{"event_id": "uuid-3", "store_id": "STORE_BLR_002", "camera_id": "CAM1", "visitor_id": "V_001", "event_type": "ZONE_DWELL", "zone_id": "SKINCARE", "timestamp": "2026-04-10T16:53:00Z", "dwell_ms": 120000, "is_staff": false}
+{"event_id": "uuid-4", "store_id": "STORE_BLR_002", "camera_id": "CAM_BILLING", "visitor_id": "V_001", "event_type": "BILLING_QUEUE_JOIN", "timestamp": "2026-04-10T16:54:00Z", "is_staff": false}
+{"event_id": "uuid-5", "store_id": "STORE_BLR_002", "camera_id": "CAM1", "visitor_id": "V_002", "event_type": "ENTRY", "timestamp": "2026-04-10T16:52:00Z", "is_staff": false}
+{"event_id": "uuid-6", "store_id": "STORE_BLR_002", "camera_id": "CAM_BILLING", "visitor_id": "V_002", "event_type": "BILLING_QUEUE_JOIN", "timestamp": "2026-04-10T16:53:00Z", "is_staff": false}
+{"event_id": "uuid-7", "store_id": "STORE_BLR_002", "camera_id": "CAM_BILLING", "visitor_id": "V_002", "event_type": "BILLING_QUEUE_ABANDON", "timestamp": "2026-04-10T16:58:00Z", "is_staff": false}
