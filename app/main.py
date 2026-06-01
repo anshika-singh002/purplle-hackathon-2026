@@ -53,9 +53,9 @@ def get_db():
     return conn
 
 @app.post("/events/ingest")
-async def ingest_events(payload: List[Dict[str, Any]], request: Request, request: Request):
-    request.state.event_count = len(events)
-    if len(events) > 500:
+async def ingest_events(payload: List[Dict[str, Any]], request: Request):
+    request.state.event_count = len(payload)
+    if len(payload) > 500:
         from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="Batch size exceeds maximum limit of 500 events")
 
