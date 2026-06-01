@@ -221,3 +221,25 @@ async def get_anomalies(store_id: str):
     except Exception as e:
         from fastapi import HTTPException
         raise HTTPException(status_code=503, detail={"error": "Database unavailable", "message": str(e)})
+
+
+# --- GRACEFUL DEGRADATION HANDLERS ---
+import sqlite3
+from fastapi.responses import JSONResponse
+from fastapi import Request
+
+@app.exception_handler(sqlite3.Error)
+async def db_exception_handler(request: Request, exc: sqlite3.Error):
+    return JSONResponse(
+        status_code=503, 
+        content={"error": "Database unavailable", "message": "A database error occurred while processing the request."}
+    )
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    if exc.__class__.__name__ == "HTTPException":
+        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+    return JSONResponse(
+        status_code=503, 
+        content={"error": "Service unavailable", "message": "An unexpected system error occurred."}
+    )
