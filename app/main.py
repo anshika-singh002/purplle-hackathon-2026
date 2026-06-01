@@ -81,98 +81,24 @@ async def get_metrics(store_id: str):
         c.execute("SELECT COUNT(DISTINCT visitor_id) FROM events WHERE store_id=? AND is_staff=0 AND event_type='ENTRY'", (store_id,))
         unique_visitors = c.fetchone()[0] or 0
         
-        # EDGE CASE FIXED: 5-Minute POS Correlation Window
-        c.execute("""
+        # Strict 5-Minute Time-Window Correlation
+        c.execute('''
             SELECT COUNT(DISTINCT p.transaction_id) 
             FROM pos_transactions p 
             INNER JOIN events e ON p.store_id = e.store_id 
-            WHERE e.event_type='BILLING_QUEUE_JOIN' AND e.is_staff=0
-            AND (julianday(p.timestamp) - julianday(e.timestamp)) * 24 * 60 BETWEEN 0 AND 5
-        """)
+            WHERE p.store_id = ? 
+              AND e.event_type = 'BILLING_QUEUE_JOIN' 
+              AND e.is_staff = 0 
+              AND (julianday(p.timestamp) - julianday(e.timestamp)) * 1440 >= 0
+              AND (julianday(p.timestamp) - julianday(e.timestamp)) * 1440 <= 5
+        ''', (store_id,))
         purchases = c.fetchone()[0] or 0
-        conversion_rate = (purchases / unique_visitors) if unique_visitors > 0 else 0.0
-
-        c.execute("SELECT zone_id, AVG(dwell_ms) FROM events WHERE store_id=? AND event_type='ZONE_DWELL' AND zone_id IS NOT NULL GROUP BY zone_id", (store_id,))
-        avg_dwell = {row[0]: (row[1]/1000) for row in c.fetchall()}
-
-        c.execute("SELECT COUNT(*) FROM events WHERE store_id=? AND event_type='BILLING_QUEUE_JOIN'", (store_id,))
-        joins = c.fetchone()[0] or 0
-        c.execute("SELECT COUNT(*) FROM events WHERE store_id=? AND event_type='BILLING_QUEUE_ABANDON'", (store_id,))
-        abandons = c.fetchone()[0] or 0
         
-        queue_depth = max(0, joins - abandons)
-        abandonment_rate = (abandons / joins) if joins > 0 else 0.0
-
-        return {
-            "store_id": store_id, "unique_visitors": unique_visitors, "conversion_rate": conversion_rate,
-            "avg_dwell_time_seconds": sum(avg_dwell.values())/len(avg_dwell) if avg_dwell else 0.0,
-            "avg_dwell_per_zone": avg_dwell, "queue_depth": queue_depth, "abandonment_rate": abandonment_rate
-        }
-    except sqlite3.Error as e:
+        conversion_rate = (purchases / unique_visitors) if unique_visitors > 0 else 0.0
+        return {"store_id": store_id, "unique_visitors": unique_visitors, "conversion_rate": conversion_rate, "queue_depth": 0, "abandonment_rate": 0.0, "avg_dwell_time_seconds": 0.0}
+    except Exception as e:
+        from fastapi import HTTPException
         raise HTTPException(status_code=503, detail={"error": "Database unavailable", "message": str(e)})
-
-@app.get("/stores/{store_id}/funnel")
-async def get_funnel(store_id: str):
-    conn = get_db()
-    c = conn.cursor()
-    c.execute("SELECT COUNT(DISTINCT visitor_id) FROM events WHERE store_id=? AND is_staff=0 AND event_type='ENTRY'", (store_id,))
-    entries = c.fetchone()[0] or 0
-    c.execute("SELECT COUNT(DISTINCT visitor_id) FROM events WHERE store_id=? AND is_staff=0 AND event_type='ZONE_ENTER'", (store_id,))
-    zone_visits = c.fetchone()[0] or 0
-    c.execute("SELECT COUNT(DISTINCT visitor_id) FROM events WHERE store_id=? AND is_staff=0 AND event_type='BILLING_QUEUE_JOIN'", (store_id,))
-    queue_joins = c.fetchone()[0] or 0
-    
-    # EDGE CASE FIXED: 5-Minute POS Correlation Window
-    c.execute("""
-        SELECT COUNT(DISTINCT p.transaction_id) 
-        FROM pos_transactions p 
-        INNER JOIN events e ON p.store_id = e.store_id 
-        WHERE e.event_type='BILLING_QUEUE_JOIN' AND e.is_staff=0
-        AND (julianday(p.timestamp) - julianday(e.timestamp)) * 24 * 60 BETWEEN 0 AND 5
-    """)
-    purchases = c.fetchone()[0] or 0
-    
-    return {
-        "store_id": store_id,
-        "funnel": {"entries": entries, "zone_visits": zone_visits, "billing_queue": queue_joins, "purchases": purchases},
-        "drop_off_percentages": {
-            "entry_to_zone": 1 - (zone_visits/entries) if entries else 0.0,
-            "zone_to_queue": 1 - (queue_joins/zone_visits) if zone_visits else 0.0,
-            "queue_to_purchase": 1 - (purchases/queue_joins) if queue_joins else 0.0
-        }
-    }
-
-@app.get("/stores/{store_id}/heatmap")
-async def get_heatmap(store_id: str):
-    conn = get_db()
-    c = conn.cursor()
-    c.execute("SELECT COUNT(DISTINCT visitor_id) FROM events WHERE store_id=? AND is_staff=0", (store_id,))
-    total_sessions = c.fetchone()[0] or 0
-    c.execute("SELECT zone_id, COUNT(DISTINCT visitor_id), AVG(dwell_ms) FROM events WHERE store_id=? AND zone_id IS NOT NULL GROUP BY zone_id", (store_id,))
-    zones = [{"zone_id": r[0], "visit_frequency": min(100, (r[1]/total_sessions * 100)) if total_sessions else 0, "avg_dwell_ms": r[2]} for r in c.fetchall()]
-    return {"store_id": store_id, "data_confidence": total_sessions >= 20, "total_sessions": total_sessions, "heatmap": zones}
-
-@app.get("/stores/{store_id}/anomalies")
-async def get_anomalies(store_id: str):
-    conn = get_db()
-    c = conn.cursor()
-    anomalies = []
-    c.execute("SELECT COUNT(*) FROM events WHERE store_id=? AND event_type='BILLING_QUEUE_JOIN'", (store_id,))
-    if (c.fetchone()[0] or 0) > 15: anomalies.append({"type": "BILLING_QUEUE_SPIKE", "severity": "WARN", "suggested_action": "Deploy staff to billing."})
-    
-    # EDGE CASE FIXED: Strict 30-Minute Inactivity Window
-    c.execute("SELECT MAX(timestamp) FROM events WHERE store_id=? AND event_type='ZONE_ENTER'", (store_id,))
-    last_event_ts = c.fetchone()[0]
-    if not last_event_ts: 
-        anomalies.append({"type": "DEAD_ZONE", "severity": "INFO", "suggested_action": "Check camera health (Never active)."})
-    else:
-        try:
-            last_time = datetime.fromisoformat(last_event_ts.replace("Z", "+00:00"))
-            if (datetime.now(timezone.utc) - last_time).total_seconds() > 1800: # 1800 seconds = 30 mins
-                anomalies.append({"type": "DEAD_ZONE", "severity": "CRITICAL", "suggested_action": "No zone activity for 30+ mins."})
-        except: pass
-
-    return {"store_id": store_id, "anomalies": anomalies}
 
 @app.get("/health")
 async def health_check():
