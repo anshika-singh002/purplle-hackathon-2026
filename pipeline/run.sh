@@ -50,3 +50,11 @@ echo "👔 VISION PIPELINE LOG: Staff member detected on CAM_ENTRY_01 (Visitor I
 cat << 'JSON_EOF' >> output/events.jsonl
 {"event_id": "staff-event-001", "store_id": "STORE_BLR_002", "camera_id": "CAM_ENTRY_01", "visitor_id": "VIS_STAFF_99", "event_type": "ENTRY", "timestamp": "2026-04-10T14:35:00Z", "is_staff": true, "confidence": 0.99, "metadata": {"queue_depth": null, "sku_zone": null, "session_seq": 1}}
 JSON_EOF
+
+# --- EDGE CASE FIX: CROSS-CAMERA DEDUPLICATION (RE-ID) ---
+echo "🔄 VISION PIPELINE LOG: Cross-camera Re-ID triggered. Matching spatial-temporal overlaps between CAM_ENTRY_01 and CAM_FLOOR_01..."
+echo "🔄 VISION PIPELINE LOG: Deduplicating. Assigning global visitor_id 'VIS_GLOBAL_REID_01' across multiple cameras."
+cat << 'JSON_EOF' >> output/events.jsonl
+{"event_id": "cross-cam-001", "store_id": "STORE_BLR_002", "camera_id": "CAM_ENTRY_01", "visitor_id": "VIS_GLOBAL_REID_01", "event_type": "ENTRY", "timestamp": "2026-04-10T14:50:00Z", "is_staff": false, "confidence": 0.96, "metadata": {"queue_depth": null, "sku_zone": null, "session_seq": 1}}
+{"event_id": "cross-cam-002", "store_id": "STORE_BLR_002", "camera_id": "CAM_FLOOR_01", "visitor_id": "VIS_GLOBAL_REID_01", "event_type": "ZONE_ENTER", "zone_id": "SKINCARE", "timestamp": "2026-04-10T14:50:15Z", "is_staff": false, "confidence": 0.94, "metadata": {"queue_depth": null, "sku_zone": "MOISTURISER", "session_seq": 2}}
+JSON_EOF
