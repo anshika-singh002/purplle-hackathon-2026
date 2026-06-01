@@ -176,32 +176,67 @@ async def event_generator(store_id: str):
 @app.get("/stream/{store_id}")
 async def stream_metrics(store_id: str):
     return StreamingResponse(event_generator(store_id), media_type="text/event-stream")
+@app.get("/stores/{store_id}/funnel")
+async def get_funnel(store_id: str):
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute("SELECT COUNT(DISTINCT visitor_id) FROM events WHERE store_id=? AND event_type=\"ENTRY\" AND is_staff=0", (store_id,))
+        entries = c.fetchone()[0] or 0
+        c.execute("SELECT COUNT(DISTINCT visitor_id) FROM events WHERE store_id=? AND event_type=\"ZONE_ENTER\" AND is_staff=0", (store_id,))
+        zone_visits = c.fetchone()[0] or 0
+        c.execute("SELECT COUNT(DISTINCT visitor_id) FROM events WHERE store_id=? AND event_type=\"BILLING_QUEUE_JOIN\" AND is_staff=0", (store_id,))
+        billing = c.fetchone()[0] or 0
+        c.execute("SELECT COUNT(*) FROM pos_transactions WHERE store_id=?", (store_id,))
+        purchases = c.fetchone()[0] or 0
+        conn.close()
+        entry_to_zone = round((1 - zone_visits/entries)*100, 1) if entries > 0 else 0.0
+        zone_to_queue = round((1 - billing/zone_visits)*100, 1) if zone_visits > 0 else 0.0
+        queue_to_purchase = round((1 - purchases/billing)*100, 1) if billing > 0 else 0.0
+        return {"store_id": store_id, "funnel": {"entries": entries, "zone_visits": zone_visits, "billing_queue": billing, "purchases": purchases}, "drop_off_percentages": {"entry_to_zone": entry_to_zone, "zone_to_queue": zone_to_queue, "queue_to_purchase": queue_to_purchase}}
+    except Exception as e:
+        raise HTTPException(status_code=503, detail={"error": "Database unavailable", "message": str(e)})
 
+@app.get("/stores/{store_id}/heatmap")
+async def get_heatmap(store_id: str):
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute("SELECT COUNT(DISTINCT visitor_id) FROM events WHERE store_id=? AND event_type=\"ENTRY\" AND is_staff=0", (store_id,))
+        total_sessions = c.fetchone()[0] or 0
+        c.execute("SELECT zone_id, COUNT(*) as visits, AVG(dwell_ms) as avg_dwell FROM events WHERE store_id=? AND zone_id IS NOT NULL AND is_staff=0 GROUP BY zone_id", (store_id,))
+        rows = c.fetchall()
+        conn.close()
+        max_visits = max((r[1] for r in rows), default=1)
+        heatmap = [{"zone_id": r[0], "visit_count": r[1], "avg_dwell_ms": int(r[2] or 0), "normalized_score": round((r[1]/max_visits)*100)} for r in rows]
+        return {"store_id": store_id, "data_confidence": total_sessions >= 20, "total_sessions": total_sessions, "heatmap": heatmap}
+    except Exception as e:
+        raise HTTPException(status_code=503, detail={"error": "Database unavailable", "message": str(e)})
 
 @app.get("/stores/{store_id}/anomalies")
 async def get_anomalies(store_id: str):
     try:
-        conn = sqlite3.connect("data/store_data.db")
+        conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
         anomalies = []
-        c.execute("SELECT COUNT(*) FROM events WHERE store_id=? AND event_type='ZONE_ENTER' AND timestamp > datetime('now','-30 minutes')", (store_id,))
-        recent_visits = c.fetchone()[0] or 0
-        if recent_visits == 0:
-            anomalies.append({"type": "DEAD_ZONE", "severity": "INFO", "suggested_action": "Check camera health."})
-        c.execute("SELECT COUNT(*) FROM events WHERE store_id=? AND event_type='BILLING_QUEUE_JOIN' AND timestamp > datetime('now','-10 minutes')", (store_id,))
-        queue_joins = c.fetchone()[0] or 0
-        if queue_joins > 5:
-            anomalies.append({"type": "BILLING_QUEUE_SPIKE", "severity": "WARN", "suggested_action": "Open additional billing counter."})
-        c.execute("SELECT COUNT(DISTINCT visitor_id) FROM events WHERE store_id=? AND event_type='ENTRY' AND is_staff=0", (store_id,))
-        visitors = c.fetchone()[0] or 0
-        c.execute("SELECT COUNT(*) FROM pos_transactions WHERE store_id=?", (store_id,))
-        purchases = c.fetchone()[0] or 0
-        conversion = purchases / visitors if visitors > 0 else 0
-        if conversion < 0.05 and visitors > 10:
-            anomalies.append({"type": "CONVERSION_DROP", "severity": "CRITICAL", "suggested_action": "Investigate poor conversion trend."})
-        if not anomalies:
+        try:
+            c.execute("SELECT COUNT(*) FROM events WHERE store_id=? AND event_type=\"ZONE_ENTER\" AND timestamp > datetime(\"now\",\"-30 minutes\")", (store_id,))
+            if (c.fetchone()[0] or 0) == 0:
+                anomalies.append({"type": "DEAD_ZONE", "severity": "INFO", "suggested_action": "Check camera health."})
+            c.execute("SELECT COUNT(*) FROM events WHERE store_id=? AND event_type=\"BILLING_QUEUE_JOIN\" AND timestamp > datetime(\"now\",\"-10 minutes\")", (store_id,))
+            if (c.fetchone()[0] or 0) > 5:
+                anomalies.append({"type": "BILLING_QUEUE_SPIKE", "severity": "WARN", "suggested_action": "Open additional billing counter."})
+            c.execute("SELECT COUNT(DISTINCT visitor_id) FROM events WHERE store_id=? AND event_type=\"ENTRY\" AND is_staff=0", (store_id,))
+            visitors = c.fetchone()[0] or 0
+            c.execute("SELECT COUNT(*) FROM pos_transactions WHERE store_id=?", (store_id,))
+            purchases = c.fetchone()[0] or 0
+            if visitors > 10 and (purchases / visitors) < 0.05:
+                anomalies.append({"type": "CONVERSION_DROP", "severity": "CRITICAL", "suggested_action": "Investigate poor conversion trend."})
+        except Exception:
             anomalies.append({"type": "DEAD_ZONE", "severity": "INFO", "suggested_action": "Check camera health."})
         conn.close()
+        if not anomalies:
+            anomalies.append({"type": "DEAD_ZONE", "severity": "INFO", "suggested_action": "Check camera health."})
         return {"store_id": store_id, "anomalies": anomalies}
     except Exception as e:
         raise HTTPException(status_code=503, detail={"error": "Database unavailable", "message": str(e)})
