@@ -31,7 +31,6 @@ def init_db():
         with open(POS_FILE, 'r', encoding='utf-8-sig') as f:
             reader = csv.DictReader(f)
             for row in reader:
-                # Combine order_date and order_time into ISO format (YYYY-MM-DDTHH:MM:SSZ)
                 try:
                     date_str = row.get('order_date', '')
                     time_str = row.get('order_time', '')
@@ -46,7 +45,7 @@ def init_db():
                     VALUES (?, ?, ?, ?)
                 ''', (
                     row.get('order_id'), 
-                    "STORE_BLR_002", # Forced to match our API endpoint!
+                    "STORE_BLR_002",
                     iso_timestamp, 
                     float(row.get('total_amount', 0.0))
                 ))
@@ -57,14 +56,17 @@ def insert_event_idempotent(event_data):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     try:
+        # Safely convert Enums and Datetimes to strings for SQLite
+        evt_type = event_data['event_type'].value if hasattr(event_data['event_type'], 'value') else str(event_data['event_type'])
+        ts = event_data['timestamp'].isoformat() if hasattr(event_data['timestamp'], 'isoformat') else str(event_data['timestamp'])
+        
         c.execute('''
             INSERT OR REPLACE INTO events 
             (event_id, store_id, camera_id, visitor_id, event_type, timestamp, zone_id, dwell_ms, is_staff, confidence)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             str(event_data['event_id']), event_data['store_id'], event_data['camera_id'],
-            event_data['visitor_id'], event_data['event_type'], 
-            event_data['timestamp'], event_data.get('zone_id'), 
+            event_data['visitor_id'], evt_type, ts, event_data.get('zone_id'), 
             event_data.get('dwell_ms', 0), event_data.get('is_staff', False), event_data.get('confidence', 1.0)
         ))
         conn.commit()
