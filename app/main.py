@@ -180,7 +180,7 @@ async def stream_metrics(store_id: str):
 @app.get("/stores/{store_id}/anomalies")
 async def get_anomalies(store_id: str):
     try:
-        from app.database import get_db
+        from database import get_db
         conn = get_db()
         c = conn.cursor()
         anomalies = []
