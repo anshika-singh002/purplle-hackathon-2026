@@ -129,7 +129,7 @@ async def health_check():
         raise HTTPException(status_code=503, detail={"error": "Database unavailable", "message": str(e)})
 
 
-@app.get("/dashboard", response_class=HTMLResponse)
+@app.get("/old_dashboard", response_class=HTMLResponse)
 async def get_dashboard():
     return """
     <!DOCTYPE html>
@@ -240,3 +240,323 @@ async def get_anomalies(store_id: str):
         return {"store_id": store_id, "anomalies": anomalies}
     except Exception as e:
         raise HTTPException(status_code=503, detail={"error": "Database unavailable", "message": str(e)})
+
+
+@app.get("/old_dashboard")
+async def dashboard(store_id: str = "STORE_BLR_002"):
+    html_template = """<!DOCTYPE html>
+<html>
+<head>
+<title>Apex Retail Intelligence</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0d1117; color: #e6edf3; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .navbar { display: flex; align-items: center; background: #161b22; border-bottom: 1px solid #30363d; padding: 0 24px; height: 60px; position: sticky; top: 0; z-index: 100; }
+  .nav-brand { font-size: 16px; font-weight: 700; color: #fff; margin-right: 32px; display: flex; align-items: center; gap: 8px; }
+  .nav-item { padding: 0 16px; height: 100%; display: flex; align-items: center; color: #8b949e; font-size: 14px; font-weight: 500; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s; }
+  .nav-item:hover { color: #c9d1d9; }
+  .nav-item.active { color: #58a6ff; border-bottom-color: #58a6ff; }
+  .container { padding: 24px; max-width: 1200px; margin: 0 auto; }
+  .page { display: none; animation: fadeIn 0.3s ease-in-out; }
+  .page.active { display: block; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+  h2 { font-size: 20px; font-weight: 600; margin-bottom: 20px; color: #fff; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+  .card { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 24px; transition: transform 0.2s, border-color 0.2s; }
+  .card:hover { transform: translateY(-2px); border-color: #8b949e; }
+  .label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: #8b949e; margin-bottom: 12px; }
+  .value { font-size: 42px; font-weight: 700; }
+  .blue { color: #58a6ff; } .green { color: #3fb950; } .orange { color: #f85149; } .yellow { color: #e3b341; }
+  .live-indicator { width: 10px; height: 10px; background-color: #3fb950; border-radius: 50%; border: 2px solid #0d1117; box-shadow: 0 0 0 0 rgba(63, 185, 80, 0.7); animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(63, 185, 80, 0.7); } 70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(63, 185, 80, 0); } 100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(63, 185, 80, 0); } }
+  .section { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 24px; margin-bottom: 16px; }
+  .funnel-bar { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
+  .funnel-label { width: 140px; font-size: 14px; color: #c9d1d9; font-weight: 500; }
+  .funnel-track { flex: 1; background: #0d1117; border-radius: 6px; height: 32px; overflow: hidden; border: 1px solid #30363d; }
+  .funnel-fill { height: 100%; background: linear-gradient(90deg, #1f6feb, #58a6ff); transition: width 0.8s; display: flex; align-items: center; padding-left: 12px; font-size: 13px; font-weight: 600; color: #fff; }
+  .heatmap-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid #21262d; border-radius: 6px; margin-bottom: 8px; background: #0d1117; }
+  .badge { padding: 4px 10px; border-radius: 20px; font-size: 12px; background: #1f6feb33; color: #58a6ff; font-weight: 600; }
+  .anomaly { padding: 16px; border-radius: 8px; margin-bottom: 12px; font-size: 14px; background: #0d1117; border: 1px solid #30363d; }
+  .anomaly strong { display: block; font-size: 16px; margin-bottom: 6px; color: #fff; }
+  .INFO { border-left: 4px solid #58a6ff; } .WARN { border-left: 4px solid #e3b341; } .CRITICAL { border-left: 4px solid #f85149; }
+</style>
+</head>
+<body>
+
+<nav class="navbar">
+  <div class="nav-brand"><div class="live-indicator"></div> Apex Analytics</div>
+  <div class="nav-item active" id="tab-overview" onclick="switchTab('overview')">Overview</div>
+  <div class="nav-item" id="tab-funnel" onclick="switchTab('funnel')">Conversion Funnel</div>
+  <div class="nav-item" id="tab-zones" onclick="switchTab('zones')">Zone Heatmap</div>
+  <div class="nav-item" id="tab-alerts" onclick="switchTab('alerts')">System Alerts</div>
+</nav>
+
+<div class="container">
+  <div id="page-overview" class="page active">
+    <h2>Store Status: STORE_ID_PLACEHOLDER</h2>
+    <div class="grid">
+      <div class="card"><div class="label">Unique Visitors</div><div class="value blue" id="visitors">-</div></div>
+      <div class="card"><div class="label">Conversion Rate</div><div class="value green" id="conversion">-</div></div>
+      <div class="card"><div class="label">Avg Dwell (sec)</div><div class="value yellow" id="dwell">-</div></div>
+      <div class="card"><div class="label">Queue Depth</div><div class="value orange" id="queue">-</div></div>
+    </div>
+  </div>
+
+  <div id="page-funnel" class="page">
+    <h2>Customer Journey</h2>
+    <div class="section" id="funnel-container"><div style="color:#8b949e">Loading data...</div></div>
+  </div>
+
+  <div id="page-zones" class="page">
+    <h2>Floor Heatmap</h2>
+    <div class="section" id="heatmap-container"><div style="color:#8b949e">Loading spatial data...</div></div>
+  </div>
+
+  <div id="page-alerts" class="page">
+    <h2>Active Anomalies</h2>
+    <div class="section" id="anomaly-container"><div style="color:#8b949e">Scanning for anomalies...</div></div>
+  </div>
+  
+  <div style="font-size:12px;color:#8b949e;margin-top:24px;text-align:right" id="lastupdate"></div>
+</div>
+
+<script>
+const STORE = 'STORE_ID_PLACEHOLDER';
+const BASE = window.location.origin;
+
+function switchTab(tabId) {
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-' + tabId).classList.add('active');
+  document.getElementById('page-' + tabId).classList.add('active');
+}
+
+function updateMetrics() {
+  fetch(BASE + "/stores/" + STORE + "/metrics")
+    .then(r => r.json()).then(d => {
+      document.getElementById("visitors").textContent = d.unique_visitors ?? 0;
+      document.getElementById("conversion").textContent = ((d.conversion_rate || 0) * 100).toFixed(1) + "%";
+      document.getElementById("dwell").textContent = Math.round(d.avg_dwell_time_seconds || 0);
+      document.getElementById("queue").textContent = d.queue_depth ?? 0;
+    }).catch(e => console.log(e));
+}
+
+function updateFunnel() {
+  fetch(BASE + "/stores/" + STORE + "/funnel")
+    .then(r => r.json()).then(d => {
+      const f = d.funnel || {};
+      const max = f.entries || 1;
+      const rows = [
+        ["Store Entries", f.entries || 0],
+        ["Zone Engagement", f.zone_visits || 0],
+        ["Billing Queue", f.billing_queue || 0],
+        ["Successful Purchases", f.purchases || 0]
+      ];
+      document.getElementById("funnel-container").innerHTML = rows.map(([label, val]) => {
+        const pct = Math.max(2, Math.round((val / max) * 100));
+        return `<div class="funnel-bar"><div class="funnel-label">${label}</div><div class="funnel-track"><div class="funnel-fill" style="width:${pct}%">${val}</div></div></div>`;
+      }).join("");
+    }).catch(e => console.log(e));
+}
+
+function updateHeatmap() {
+  fetch(BASE + "/stores/" + STORE + "/heatmap")
+    .then(r => r.json()).then(d => {
+      if (!d.heatmap || d.heatmap.length === 0) {
+        document.getElementById("heatmap-container").innerHTML = "<div style='color:#8b949e'>No zone data available.</div>";
+        return;
+      }
+      document.getElementById("heatmap-container").innerHTML = d.heatmap.map(z =>
+        `<div class="heatmap-row">
+          <div><strong style="color:#fff;font-size:15px">${z.zone_id}</strong> &nbsp; <span class="badge">${z.visit_count} visitors</span></div>
+          <div style="color:#8b949e">${Math.round(z.avg_dwell_ms/1000)}s Avg Dwell</div>
+        </div>`
+      ).join("");
+    }).catch(e => console.log(e));
+}
+
+function updateAnomalies() {
+  fetch(BASE + "/stores/" + STORE + "/anomalies")
+    .then(r => r.json()).then(d => {
+      if (!d.anomalies || d.anomalies.length === 0) {
+         document.getElementById("anomaly-container").innerHTML = "<div style='color:#3fb950;padding:16px;border:1px solid #238636;border-radius:8px;background:#0d1117'>✅ All systems nominal. No anomalies detected.</div>";
+         return;
+      }
+      document.getElementById("anomaly-container").innerHTML = d.anomalies.map(a =>
+        `<div class="anomaly ${a.severity}"><strong>${a.type} <span class="badge" style="float:right;margin-top:-4px">${a.severity}</span></strong><span style="color:#8b949e">${a.suggested_action}</span></div>`
+      ).join("");
+    }).catch(e => console.log(e));
+}
+
+function updateAll() {
+  updateMetrics(); updateFunnel(); updateHeatmap(); updateAnomalies();
+  document.getElementById("lastupdate").textContent = "Live Feed Updated: " + new Date().toLocaleTimeString();
+}
+
+updateAll();
+setInterval(updateAll, 3000);
+</script>
+</body></html>"""
+    
+    html = html_template.replace("STORE_ID_PLACEHOLDER", store_id)
+    return HTMLResponse(content=html)
+
+
+@app.get("/dashboard")
+async def interactive_dashboard(store_id: str = "STORE_BLR_002"):
+    html_template = """<!DOCTYPE html>
+<html>
+<head>
+<title>Apex Retail Intelligence</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0d1117; color: #e6edf3; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .navbar { display: flex; align-items: center; background: #161b22; border-bottom: 1px solid #30363d; padding: 0 24px; height: 60px; position: sticky; top: 0; z-index: 100; }
+  .nav-brand { font-size: 16px; font-weight: 700; color: #fff; margin-right: 32px; display: flex; align-items: center; gap: 8px; }
+  .nav-item { padding: 0 16px; height: 100%; display: flex; align-items: center; color: #8b949e; font-size: 14px; font-weight: 500; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s; }
+  .nav-item:hover { color: #c9d1d9; }
+  .nav-item.active { color: #58a6ff; border-bottom-color: #58a6ff; }
+  .container { padding: 24px; max-width: 1200px; margin: 0 auto; }
+  .page { display: none; animation: fadeIn 0.3s ease-in-out; }
+  .page.active { display: block; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+  h2 { font-size: 20px; font-weight: 600; margin-bottom: 20px; color: #fff; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+  .card { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 24px; transition: transform 0.2s, border-color 0.2s; }
+  .card:hover { transform: translateY(-2px); border-color: #8b949e; }
+  .label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: #8b949e; margin-bottom: 12px; }
+  .value { font-size: 42px; font-weight: 700; }
+  .blue { color: #58a6ff; } .green { color: #3fb950; } .orange { color: #f85149; } .yellow { color: #e3b341; }
+  .live-indicator { width: 10px; height: 10px; background-color: #3fb950; border-radius: 50%; border: 2px solid #0d1117; box-shadow: 0 0 0 0 rgba(63, 185, 80, 0.7); animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(63, 185, 80, 0.7); } 70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(63, 185, 80, 0); } 100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(63, 185, 80, 0); } }
+  .section { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 24px; margin-bottom: 16px; }
+  .funnel-bar { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
+  .funnel-label { width: 140px; font-size: 14px; color: #c9d1d9; font-weight: 500; }
+  .funnel-track { flex: 1; background: #0d1117; border-radius: 6px; height: 32px; overflow: hidden; border: 1px solid #30363d; }
+  .funnel-fill { height: 100%; background: linear-gradient(90deg, #1f6feb, #58a6ff); transition: width 0.8s; display: flex; align-items: center; padding-left: 12px; font-size: 13px; font-weight: 600; color: #fff; }
+  .heatmap-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid #21262d; border-radius: 6px; margin-bottom: 8px; background: #0d1117; }
+  .badge { padding: 4px 10px; border-radius: 20px; font-size: 12px; background: #1f6feb33; color: #58a6ff; font-weight: 600; }
+  .anomaly { padding: 16px; border-radius: 8px; margin-bottom: 12px; font-size: 14px; background: #0d1117; border: 1px solid #30363d; }
+  .anomaly strong { display: block; font-size: 16px; margin-bottom: 6px; color: #fff; }
+  .INFO { border-left: 4px solid #58a6ff; } .WARN { border-left: 4px solid #e3b341; } .CRITICAL { border-left: 4px solid #f85149; }
+</style>
+</head>
+<body>
+
+<nav class="navbar">
+  <div class="nav-brand"><div class="live-indicator"></div> Apex Analytics</div>
+  <div class="nav-item active" id="tab-overview" onclick="switchTab('overview')">Overview</div>
+  <div class="nav-item" id="tab-funnel" onclick="switchTab('funnel')">Conversion Funnel</div>
+  <div class="nav-item" id="tab-zones" onclick="switchTab('zones')">Zone Heatmap</div>
+  <div class="nav-item" id="tab-alerts" onclick="switchTab('alerts')">System Alerts</div>
+</nav>
+
+<div class="container">
+  <div id="page-overview" class="page active">
+    <h2>Store Status: STORE_ID_PLACEHOLDER</h2>
+    <div class="grid">
+      <div class="card"><div class="label">Unique Visitors</div><div class="value blue" id="visitors">-</div></div>
+      <div class="card"><div class="label">Conversion Rate</div><div class="value green" id="conversion">-</div></div>
+      <div class="card"><div class="label">Avg Dwell (sec)</div><div class="value yellow" id="dwell">-</div></div>
+      <div class="card"><div class="label">Queue Depth</div><div class="value orange" id="queue">-</div></div>
+    </div>
+  </div>
+
+  <div id="page-funnel" class="page">
+    <h2>Customer Journey</h2>
+    <div class="section" id="funnel-container"><div style="color:#8b949e">Loading data...</div></div>
+  </div>
+
+  <div id="page-zones" class="page">
+    <h2>Floor Heatmap</h2>
+    <div class="section" id="heatmap-container"><div style="color:#8b949e">Loading spatial data...</div></div>
+  </div>
+
+  <div id="page-alerts" class="page">
+    <h2>Active Anomalies</h2>
+    <div class="section" id="anomaly-container"><div style="color:#8b949e">Scanning for anomalies...</div></div>
+  </div>
+  
+  <div style="font-size:12px;color:#8b949e;margin-top:24px;text-align:right" id="lastupdate"></div>
+</div>
+
+<script>
+const STORE = 'STORE_ID_PLACEHOLDER';
+const BASE = window.location.origin;
+
+function switchTab(tabId) {
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-' + tabId).classList.add('active');
+  document.getElementById('page-' + tabId).classList.add('active');
+}
+
+function updateMetrics() {
+  fetch(BASE + "/stores/" + STORE + "/metrics")
+    .then(r => r.json()).then(d => {
+      document.getElementById("visitors").textContent = d.unique_visitors ?? 0;
+      document.getElementById("conversion").textContent = ((d.conversion_rate || 0) * 100).toFixed(1) + "%";
+      document.getElementById("dwell").textContent = Math.round(d.avg_dwell_time_seconds || 0);
+      document.getElementById("queue").textContent = d.queue_depth ?? 0;
+    }).catch(e => console.log(e));
+}
+
+function updateFunnel() {
+  fetch(BASE + "/stores/" + STORE + "/funnel")
+    .then(r => r.json()).then(d => {
+      const f = d.funnel || {};
+      const max = f.entries || 1;
+      const rows = [
+        ["Store Entries", f.entries || 0],
+        ["Zone Engagement", f.zone_visits || 0],
+        ["Billing Queue", f.billing_queue || 0],
+        ["Successful Purchases", f.purchases || 0]
+      ];
+      document.getElementById("funnel-container").innerHTML = rows.map(([label, val]) => {
+        const pct = Math.max(2, Math.round((val / max) * 100));
+        return `<div class="funnel-bar"><div class="funnel-label">${label}</div><div class="funnel-track"><div class="funnel-fill" style="width:${pct}%">${val}</div></div></div>`;
+      }).join("");
+    }).catch(e => console.log(e));
+}
+
+function updateHeatmap() {
+  fetch(BASE + "/stores/" + STORE + "/heatmap")
+    .then(r => r.json()).then(d => {
+      if (!d.heatmap || d.heatmap.length === 0) {
+        document.getElementById("heatmap-container").innerHTML = "<div style='color:#8b949e'>No zone data available.</div>";
+        return;
+      }
+      document.getElementById("heatmap-container").innerHTML = d.heatmap.map(z =>
+        `<div class="heatmap-row">
+          <div><strong style="color:#fff;font-size:15px">${z.zone_id}</strong> &nbsp; <span class="badge">${z.visit_count} visitors</span></div>
+          <div style="color:#8b949e">${Math.round(z.avg_dwell_ms/1000)}s Avg Dwell</div>
+        </div>`
+      ).join("");
+    }).catch(e => console.log(e));
+}
+
+function updateAnomalies() {
+  fetch(BASE + "/stores/" + STORE + "/anomalies")
+    .then(r => r.json()).then(d => {
+      if (!d.anomalies || d.anomalies.length === 0) {
+         document.getElementById("anomaly-container").innerHTML = "<div style='color:#3fb950;padding:16px;border:1px solid #238636;border-radius:8px;background:#0d1117'>✅ All systems nominal. No anomalies detected.</div>";
+         return;
+      }
+      document.getElementById("anomaly-container").innerHTML = d.anomalies.map(a =>
+        `<div class="anomaly ${a.severity}"><strong>${a.type} <span class="badge" style="float:right;margin-top:-4px">${a.severity}</span></strong><span style="color:#8b949e">${a.suggested_action}</span></div>`
+      ).join("");
+    }).catch(e => console.log(e));
+}
+
+function updateAll() {
+  updateMetrics(); updateFunnel(); updateHeatmap(); updateAnomalies();
+  document.getElementById("lastupdate").textContent = "Live Feed Updated: " + new Date().toLocaleTimeString();
+}
+
+updateAll();
+setInterval(updateAll, 3000);
+</script>
+</body></html>"""
+    
+    html = html_template.replace("STORE_ID_PLACEHOLDER", store_id)
+    return HTMLResponse(content=html)
