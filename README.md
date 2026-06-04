@@ -1,9 +1,10 @@
-# 🏬 Apex Retail: Store Intelligence System
+# 🏢 Apex Retail: Store Intelligence System
 
-## Setup & Execution (Exactly 5 Commands)
+## 🔗 Setup & Execution (Exactly 5 Commands)
+
 Follow these commands to clone, deploy, process video, and view the real-time analytics dashboard:
 
-1. `git clone https://github.com/YOUR-USERNAME/purplle-hackathon-2026.git`
+1. `git clone https://github.com/anshika-singh002/purplle-hackathon-2026.git`
 2. `cd purplle-hackathon-2026`
 3. `docker compose up -d --build`
 4. `./pipeline/run.sh`
@@ -11,10 +12,9 @@ Follow these commands to clone, deploy, process video, and view the real-time an
 
 *(Note: The `pipeline/run.sh` command processes the clips and routes output to `output/events.jsonl` before ingesting it automatically into the API).*
 
-## 📊 Live Bonus Dashboard
-To view the real-time Server-Sent Events (SSE) dashboard, open your browser and navigate to:
-**[http://localhost:8000/dashboard](http://localhost:8000/dashboard)**
+## 📊 Live Interactive Dashboard
 
-## Local Dashboard
-As per the specification, the local dashboard can be accessed at:
-http://localhost:8000/dashboard
+The frontend has been upgraded to a React-style Single Page Application (SPA) featuring tabbed navigation, live metrics polling, conversion funnels, floor heatmaps, and active anomaly alerts.
+
+As per the specification, the local dashboard can be accessed at: 
+[http://localhost:8000/dashboard](http://localhost:8000/dashboard)
