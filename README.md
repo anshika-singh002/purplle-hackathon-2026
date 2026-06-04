@@ -18,3 +18,11 @@ The frontend has been upgraded to a React-style Single Page Application (SPA) fe
 
 As per the specification, the local dashboard can be accessed at: 
 [http://localhost:8000/dashboard](http://localhost:8000/dashboard)
+
+
+## 🎤 Pitch Presentation
+
+View the full project pitch deck here:
+
+[Apex Retail Intelligence - Pitch Deck](https://drive.google.com/file/d/1f_OggoRbZI2K0UeSzi2N9MgbbJ0-fQv4/view?usp=sharing)
+
